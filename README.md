@@ -97,6 +97,34 @@ Los CSV del dataset no se versionan (demasiado pesados, ~1.5 GB total). Se gener
 5. Registro del modelo campeón (Random Forest) en el MLflow Model Registry
 6. Conclusiones y análisis del gap de performance
 
+## Tracking de experimentos con MLflow
+
+Todos los experimentos están registrados en `mlflow.db` (SQLite local). La UI se puede levantar con:
+
+```bash
+mlflow ui --backend-store-uri sqlite:///Entrega_Aprendizaje_Maq/mlflow.db
+# Acceder en http://localhost:5000
+```
+
+**Estructura del experimento:** un único experimento llamado `EcoBici_Clasificacion` con un run por modelo. Los runs de búsqueda de hiperparámetros con Optuna generan runs anidados (un run hijo por trial).
+
+**Qué se loguea por cada modelo:**
+
+| Categoría | Detalle |
+|---|---|
+| Parámetros | Hiperparámetros del modelo (los del mejor trial de Optuna) |
+| Métricas de CV | F1-macro por fold durante la búsqueda |
+| Métricas en test | Accuracy, F1-macro, F1-weighted, Precision-macro, Recall-macro |
+| Artefactos | Confusion matrix, curva de aprendizaje (RF), feature importance (RF, XGBoost), gráfico de evolución de Optuna |
+| Modelo | Serializado en formato `.skops` (scikit-learn secure format) |
+
+**Model Registry:** el Random Forest (modelo campeón) fue registrado en el MLflow Model Registry con el alias `champion`. Esto permite cargarlo en producción con:
+
+```python
+import mlflow.sklearn
+model = mlflow.sklearn.load_model("models:/EcoBici_RF_Champion@champion")
+```
+
 ## Decisiones técnicas destacadas
 
 **Métrica principal: F1-macro.** Se eligió sobre accuracy porque las clases están desbalanceadas (26 / 56 / 18 %) y un modelo trivial puede alcanzar 55 % de accuracy prediciendo siempre Mediano. F1-macro penaliza igual el error en las tres clases.
