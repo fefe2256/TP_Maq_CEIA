@@ -7,8 +7,28 @@ Este documento describe paso a paso cómo levantar el ambiente, cargar los datos
 ## Prerequisitos
 
 - Docker Desktop instalado y corriendo (mínimo 4 GB de RAM asignados)
-- Los datasets en `EDA/dataset/` (`X_train.csv`, `X_test.csv`, `y_train.csv`, `y_test.csv`, `ecobici_data.csv`)
+- Los datasets en `EDA/dataset/` — ver cómo obtenerlos más abajo
 - Un entorno Python local con `boto3` instalado (solo para correr la notebook de upload)
+
+### Cómo obtener los datasets
+
+Los CSV no están en el repositorio por su tamaño (~1.5 GB). Hay dos opciones:
+
+**Opción A — Correr el notebook de EDA (genera todo automáticamente):**
+```bash
+pip install gdown folium jupyter
+jupyter notebook EDA/notebook/TP_Grp7_V3_ecobici_presentation_ready.ipynb
+```
+La Sección 1 descarga el raw desde Google Drive y la Sección 12 exporta los 4 splits.
+
+**Opción B — Descarga manual del raw + correr solo la exportación:**
+```bash
+pip install gdown
+gdown 1t-QLtl__u1JCIXtjXEMUy_VfIttB0Kbp -O EDA/dataset/ecobici_data.csv
+```
+Luego correr el notebook de EDA para generar los splits procesados.
+
+En ambos casos los archivos deben quedar en `EDA/dataset/` antes de continuar. Ver `EDA/dataset/README.md` para más detalle.
 
 ---
 

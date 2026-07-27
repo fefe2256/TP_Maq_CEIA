@@ -56,7 +56,7 @@ TP_Maq_CEIA/
         └── postgres/                                      ← base de datos PostgreSQL
 ```
 
-> Los CSV del dataset no se versionan por su tamaño (~1.5 GB total). Se generan ejecutando el notebook del EDA. Ver `EDA/dataset/README.md`.
+> Los CSV del dataset no se versionan por su tamaño (~1.5 GB total). Para obtenerlos hay dos opciones: correr el notebook de EDA (descarga el raw automáticamente vía `gdown` y genera los splits) o descargar el raw directamente desde [Google Drive](https://drive.google.com/uc?id=1t-QLtl__u1JCIXtjXEMUy_VfIttB0Kbp). Ver instrucciones completas en `EDA/dataset/README.md`.
 
 ---
 
