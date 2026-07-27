@@ -53,9 +53,8 @@ La métrica principal es **F1-macro**, que pondera por igual las tres clases y p
 ## Estructura del repositorio
 
 ```
-CEIA-APRENDIZAJE_DE_MAQUINA-TP-FINAL/
+TP_Maq_CEIA/
 ├── README.md                                              ← este archivo
-├── mlflow.db                                              ← base de datos SQLite con todos los experimentos
 │
 ├── EDA/                                                   ← pipeline de preparación de datos (TP Análisis de Datos)
 │   ├── README.md
@@ -67,11 +66,22 @@ CEIA-APRENDIZAJE_DE_MAQUINA-TP-FINAL/
 │       ├── X_train.csv  ·  X_test.csv                    ← features escaladas (no versionadas)
 │       └── y_train.csv  ·  y_test.csv                    ← targets (no versionados)
 │
-└── Entrega_Aprendizaje_Maq/                               ← modelado ML (este TP)
-    ├── TPMAQ2_VML_mlflow_parte1.ipynb                     ← Baselines, KNN, LinearSVC, Random Forest
-    ├── TPMAQ2_VML_mlflow_parte2.ipynb                     ← XGBoost, CatBoost, comparación final
-    ├── Ecobici_ML_V2.pptx                                 ← presentación de defensa
-    └── mlruns/                                            ← artefactos de MLflow (modelos, gráficos)
+├── Entrega_Aprendizaje_Maq/                               ← modelado ML (TP Aprendizaje de Máquina)
+│   ├── TPMAQ2_VML_mlflow_parte1.ipynb                     ← Baselines, KNN, LinearSVC, Random Forest
+│   ├── TPMAQ2_VML_mlflow_parte2.ipynb                     ← XGBoost, CatBoost, comparación final
+│   └── Ecobici_ML_V2.pptx                                 ← presentación de defensa
+│
+└── Entrega_AMq2/                                          ← ambiente productivo (TP Arquitectura ML)
+    ├── docker-compose.yaml                                ← orquestación de todos los servicios
+    ├── .env.example                                       ← variables de entorno (copiar como .env)
+    ├── airflow/
+    │   ├── dags/                                          ← DAGs de Airflow (ETL, entrenamiento)
+    │   └── secrets/                                       ← variables y conexiones de Airflow
+    └── dockerfiles/
+        ├── airflow/                                       ← imagen custom de Airflow
+        ├── fastapi/                                       ← API REST para servir el modelo
+        ├── mlflow/                                        ← servidor MLflow
+        └── postgres/                                      ← base de datos PostgreSQL
 ```
 
 Los CSV del dataset no se versionan (demasiado pesados, ~1.5 GB total). Se generan ejecutando el notebook del EDA.
