@@ -1,0 +1,33 @@
+# Datasets grandes (se generan ejecutando los notebooks)
+EDA/dataset/ecobici_data.csv
+EDA/dataset/X_train.csv
+EDA/dataset/X_test.csv
+EDA/dataset/y_train.csv
+EDA/dataset/y_test.csv
+
+# Modelos (demasiado pesados para git)
+Entrega_Aprendizaje_Maq/mlruns/
+Entrega_Aprendizaje_Maq/mlflow.db
+Entrega_Aprendizaje_Maq/catboost_info/
+mlflow.db
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# macOS
+.DS_Store
+
+# IDEs
+.vscode/
+.idea/

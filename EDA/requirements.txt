@@ -1,0 +1,14 @@
+# TP Final · Análisis de Datos · CEIA FIUBA 1B 2026
+# Dependencias del notebook TP_Grp7_V3_ecobici_presentation_ready.ipynb
+# Python 3.10+
+
+pandas>=2.0.0
+numpy>=1.24.0
+matplotlib>=3.7.0
+seaborn>=0.12.0
+scikit-learn>=1.3.0
+scipy>=1.11.0
+folium>=0.14.0
+gdown>=4.7.0
+jupyter>=1.0.0
+ipykernel>=6.25.0
