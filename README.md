@@ -44,8 +44,11 @@ TP_Maq_CEIA/
     ├── docker-compose.yaml                                ← orquestación de todos los servicios
     ├── .env.example                                       ← variables de entorno (copiar como .env)
     ├── airflow/
-    │   ├── dags/                                          ← DAGs de Airflow
+    │   ├── dags/
+    │   │   └── train_ecobici.py                           ← DAG de entrenamiento (5 modelos + champion)
     │   └── secrets/                                       ← variables y conexiones
+    ├── notebook_example/
+    │   └── test.ipynb                                     ← upload de datos a MinIO
     └── dockerfiles/
         ├── airflow/                                       ← imagen custom de Airflow
         ├── fastapi/                                       ← API REST para servir el modelo
@@ -137,11 +140,44 @@ Implementación del modelo EcoBici en un ambiente productivo containerizado con 
 
 | Servicio | Rol | Puerto |
 |---|---|---|
-| Apache Airflow | Orquestación de DAGs (ETL, entrenamiento) | 8080 |
+| Apache Airflow | Orquestación de DAGs | 8080 |
 | MLflow | Tracking de experimentos + Model Registry | 5001 |
 | FastAPI | API REST para servir predicciones | 8800 |
 | MinIO | Data Lake S3 local (datasets y artefactos) | 9000/9001 |
 | PostgreSQL | Backend de Airflow y MLflow | 5432 |
+
+### DAG de entrenamiento (`train_ecobici`)
+
+Pipeline MLOps completo orquestado con Airflow dentro de Docker:
+
+1. **`validate_data`** — verifica que los splits existen en MinIO
+2. **`train_baseline_trivial`** — DummyClassifier (clase mayoritaria)
+3. **`train_logistic_regression`** — LR multinomial sobre 1.5 M muestras
+4. **`train_random_forest`** — RF con mejores hiperparámetros de Optuna
+5. **`train_xgboost`** — XGBoost con mejores hiperparámetros de Optuna
+6. **`train_catboost`** — CatBoost con parámetros default
+7. **`select_champion`** — compara por F1-macro y registra el mejor en el Model Registry con alias `champion`
+
+Los modelos 2–6 corren en paralelo. Todos loguean en el MLflow containerizado (`http://mlflow:5000`).
+
+### API de predicción (`POST /predict`)
+
+FastAPI expone un endpoint REST que carga el modelo `champion` desde el MLflow Model Registry al arrancar y sirve predicciones en tiempo real:
+
+```bash
+curl -X POST http://localhost:8800/predict \
+  -H "Content-Type: application/json" \
+  -d '{"hora_sin": 0.5, "hora_cos": 0.866, "mes_sin": 0.5, "mes_cos": 0.866,
+       "es_fin_de_semana": 0, "lat_estacion_origen": -34.603,
+       "long_estacion_origen": -58.381, "modelo_bicicleta": 1,
+       "genero_MALE": 1, "genero_OTHER": 0,
+       "dia_semana_Monday": 1, "dia_semana_Saturday": 0, "dia_semana_Sunday": 0,
+       "dia_semana_Thursday": 0, "dia_semana_Tuesday": 0, "dia_semana_Wednesday": 0,
+       "turno_mañana": 0, "turno_noche": 0, "turno_tarde": 1}'
+# → {"tipo_viaje": "Mediano", "descripcion": "Entre 10 y 30 minutos (tramo gratuito del sistema)"}
+```
+
+Documentación interactiva disponible en http://localhost:8800/docs.
 
 ---
 
@@ -202,7 +238,7 @@ docker compose --profile all down
 
 **ML:** Python 3.10+ · scikit-learn · XGBoost · CatBoost · Optuna · MLflow · pandas · numpy · matplotlib · seaborn · Jupyter
 
-**Producción:** Docker · Apache Airflow · MLflow · FastAPI · MinIO · PostgreSQL
+**Producción:** Docker · Apache Airflow (CeleryExecutor) · MLflow 2.10 · FastAPI · MinIO · PostgreSQL · Valkey
 
 ## Licencia
 

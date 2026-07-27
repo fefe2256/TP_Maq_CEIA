@@ -6,3 +6,5 @@ pandas
 numpy
 boto3
 skops
+xgboost
+catboost

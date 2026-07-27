@@ -40,7 +40,7 @@ Implementación del modelo EcoBici (Random Forest) en un ambiente productivo con
 | FastAPI | API REST para servir predicciones | 8800 |
 | MinIO | Data Lake S3 local (datasets y artefactos ML) | 9000 / 9001 |
 | PostgreSQL | Backend de Airflow y MLflow | 5432 |
-| Valkey/Redis | Broker de Celery para Airflow | 6379 |
+| Valkey | Broker de Celery para Airflow (fork open-source de Redis) | 6379 |
 
 ### Buckets MinIO
 
@@ -59,16 +59,20 @@ Entrega_Operaciones/
 ├── .env.example                 ← plantilla de variables de entorno
 │
 ├── airflow/
-│   ├── dags/                    ← DAGs de entrenamiento y ETL
+│   ├── dags/
+│   │   └── train_ecobici.py     ← DAG: 5 modelos + selección automática de champion
 │   ├── logs/                    ← logs de ejecución (generado al levantar)
 │   ├── plugins/                 ← plugins custom de Airflow
 │   ├── config/                  ← configuración de Airflow
 │   └── secrets/
-│       ├── variables.yaml       ← variables (paths S3, params)
-│       └── connections.yaml     ← conexiones (MLflow, S3)
+│       ├── variables.yaml       ← variables globales accesibles desde los DAGs
+│       └── connections.yaml     ← conexiones registradas en Airflow
+│
+├── notebook_example/
+│   └── test.ipynb               ← upload de datasets a MinIO (ejecutar antes del DAG)
 │
 └── dockerfiles/
-    ├── airflow/                 ← imagen custom (scikit-learn, mlflow, boto3, skops)
+    ├── airflow/                 ← imagen custom (scikit-learn, mlflow, boto3, xgboost, catboost)
     ├── fastapi/                 ← API REST + dependencias
     ├── mlflow/                  ← servidor MLflow con soporte S3
     └── postgres/                ← inicialización de schemas Airflow + MLflow
@@ -181,79 +185,38 @@ s3_conn:
 
 ### MinIO — subir datasets
 
-Los buckets `s3://mlflow` y `s3://data` se crean automáticamente al levantar el stack. Para subir los CSVs procesados al bucket de datos:
+Los buckets `s3://mlflow` y `s3://data` se crean automáticamente al levantar el stack. Para subir los datasets al bucket de datos, la forma recomendada es ejecutar la notebook incluida:
 
-**Opción A — MinIO Console (UI web):**
+**Opción A — Notebook (recomendada):**
+
+Ejecutar `notebook_example/test.ipynb` con Docker levantado. Sube automáticamente:
+- `ecobici/raw/ecobici_data.csv` — dataset crudo (765 MB)
+- `ecobici/processed/X_train.csv`, `X_test.csv`, `y_train.csv`, `y_test.csv` — splits procesados
+
+**Opción B — MinIO Console (UI web):**
 
 1. Ir a http://localhost:9001 → login `minio` / `minio123`
-2. Navegar a bucket `data`
-3. Crear carpeta `ecobici/` y subir los archivos `X_train.csv`, `X_test.csv`, `y_train.csv`, `y_test.csv`
+2. Navegar al bucket `data` → crear carpeta `ecobici/processed/`
+3. Subir `X_train.csv`, `X_test.csv`, `y_train.csv`, `y_test.csv` desde `EDA/dataset/`
 
-**Opción B — MinIO Client (`mc`) desde terminal:**
+**Opción C — MinIO Client (`mc`) desde terminal:**
 
 ```bash
-# Configurar alias apuntando al MinIO local
 mc alias set local http://localhost:9000 minio minio123
-
-# Crear carpeta y subir CSVs (ajustar la ruta a los archivos locales)
-mc cp ../EDA/dataset/X_train.csv local/data/ecobici/X_train.csv
-mc cp ../EDA/dataset/X_test.csv  local/data/ecobici/X_test.csv
-mc cp ../EDA/dataset/y_train.csv local/data/ecobici/y_train.csv
-mc cp ../EDA/dataset/y_test.csv  local/data/ecobici/y_test.csv
-
-# Verificar
-mc ls local/data/ecobici/
-```
-
-**Opción C — desde Python (boto3):**
-
-```python
-import boto3
-
-s3 = boto3.client(
-    "s3",
-    endpoint_url="http://localhost:9000",
-    aws_access_key_id="minio",
-    aws_secret_access_key="minio123",
-)
-
-for fname in ["X_train.csv", "X_test.csv", "y_train.csv", "y_test.csv"]:
-    s3.upload_file(f"../EDA/dataset/{fname}", "data", f"ecobici/{fname}")
+mc cp ../EDA/dataset/X_train.csv local/data/ecobici/processed/X_train.csv
+mc cp ../EDA/dataset/X_test.csv  local/data/ecobici/processed/X_test.csv
+mc cp ../EDA/dataset/y_train.csv local/data/ecobici/processed/y_train.csv
+mc cp ../EDA/dataset/y_test.csv  local/data/ecobici/processed/y_test.csv
+mc ls local/data/ecobici/processed/
 ```
 
 ### MLflow — estado inicial
 
 El servidor MLflow containerizado **arranca vacío** (sin experimentos ni modelos registrados). Esto es correcto y esperado: los experimentos del TP2 viven en `Entrega_Aprendizaje_Maq/mlflow.db` (SQLite local) y no se migran a este ambiente.
 
-El experiment y los modelos en el Model Registry se crean cuando corra el DAG de entrenamiento. Para verificar que MLflow está funcionando correctamente antes de correr cualquier DAG, se puede crear el experiment manualmente:
+El experiment y los modelos en el Model Registry se crean automáticamente cuando corra el DAG `train_ecobici`. El nombre del experimento que crea el DAG es `TPMAQ2_Ecobici_Duracion_v2` (mismo nombre que los notebooks de TP2, para coherencia).
 
-**Desde la UI:**
-
-1. Ir a http://localhost:5001
-2. Click en **"Create Experiment"**
-3. Nombre: `ecobici` — Artifact Location: `s3://mlflow/ecobici`
-
-**Desde Python:**
-
-```python
-import mlflow
-
-mlflow.set_tracking_uri("http://localhost:5001")
-mlflow.create_experiment(
-    name="ecobici",
-    artifact_location="s3://mlflow/ecobici",
-)
-```
-
-**Desde la CLI de MLflow (dentro del contenedor):**
-
-```bash
-docker exec mlflow mlflow experiments create \
-  --experiment-name ecobici \
-  --artifact-location s3://mlflow/ecobici
-```
-
-> Los artefactos (modelos `.skops`, plots, matrices de confusión) se guardan automáticamente en MinIO (`s3://mlflow/`) cuando se loguea un run desde Airflow o desde Python.
+> Los artefactos (modelos, matrices de confusión) se guardan automáticamente en MinIO (`s3://mlflow/`) cuando se loguea un run desde Airflow.
 
 ---
 
@@ -294,25 +257,24 @@ El modelo fue serializado en formato `.skops` y registrado como `champion` en el
 
 ---
 
-## Estado de la entrega parcial
+## Estado de la entrega
 
 ### Completado
 
-- [x] `docker-compose.yaml` con todos los servicios configurados (Airflow, MLflow, FastAPI, MinIO, PostgreSQL, Redis)
+- [x] `docker-compose.yaml` con todos los servicios configurados (Airflow, MLflow, FastAPI, MinIO, PostgreSQL, Valkey)
 - [x] Dockerfiles custom para Airflow, MLflow, FastAPI y PostgreSQL
-- [x] `requirements.txt` de cada contenedor con dependencias ML (scikit-learn, skops, mlflow, boto3)
+- [x] `requirements.txt` de Airflow y FastAPI con dependencias ML (scikit-learn, mlflow, boto3, skops, xgboost, catboost)
 - [x] Variables de entorno y secrets de Airflow (`variables.yaml`, `connections.yaml`)
 - [x] Inicialización automática de buckets MinIO (`s3://mlflow`, `s3://data`)
 - [x] MLflow configurado con backend PostgreSQL y artifact store en MinIO
 - [x] Airflow configurado con CeleryExecutor y LocalFilesystemBackend para secrets
-- [x] FastAPI corriendo en puerto 8800
+- [x] Notebook de upload de datos a MinIO (`notebook_example/test.ipynb`)
+- [x] DAG `train_ecobici`: 5 modelos en paralelo → logging en MLflow → champion en Model Registry
+- [x] FastAPI `POST /predict`: carga el modelo `champion` desde MLflow Model Registry y devuelve `Corto` / `Mediano` / `Largo`
 
 ### Pendiente para la entrega final
 
-- [ ] Subir datasets procesados a MinIO (`s3://data`)
-- [ ] DAG de entrenamiento: leer datos de MinIO → entrenar Random Forest → registrar en MLflow
-- [ ] DAG de ETL (opcional): procesamiento raw CSV → MinIO
-- [ ] FastAPI `POST /predict` con las 19 features de EcoBici, cargando el modelo desde MLflow Model Registry
+- [ ] Prueba end-to-end con Docker: upload de datos → triggerear DAG → verificar MLflow → probar `/predict`
 
 ---
 
@@ -334,6 +296,6 @@ El modelo fue serializado en formato `.skops` y registrado como `champion` en el
 | Serving | FastAPI + Uvicorn |
 | Data Lake | MinIO (compatible S3) |
 | Base de datos | PostgreSQL 15 |
-| Broker | Valkey/Redis 8.1 |
+| Broker | Valkey 8.1 (fork open-source de Redis) |
 | Contenedores | Docker Compose v2 |
-| ML | scikit-learn · skops · boto3 · pandas · numpy |
+| ML | scikit-learn · XGBoost · CatBoost · skops · boto3 · pandas · numpy |
