@@ -155,14 +155,16 @@ Python 3.10+ · scikit-learn · XGBoost · CatBoost · Optuna · MLflow · panda
 
 ## Cómo ejecutar
 
+### Notebooks de ML (local)
+
 **Requisitos:** tener los 4 CSV del dataset en `EDA/dataset/` (generados por el notebook de EDA). Ver `EDA/README.md`.
 
 ```bash
-# Instalar dependencias (desde la raíz del proyecto)
+# Instalar dependencias
 pip install scikit-learn xgboost catboost optuna mlflow pandas numpy matplotlib seaborn jupyter
 
 # Lanzar MLflow UI para inspeccionar los experimentos (opcional)
-mlflow ui --backend-store-uri sqlite:///mlflow.db
+mlflow ui --backend-store-uri sqlite:///Entrega_Aprendizaje_Maq/mlflow.db
 
 # Ejecutar los notebooks en orden
 jupyter notebook Entrega_Aprendizaje_Maq/TPMAQ2_VML_mlflow_parte1.ipynb
@@ -170,6 +172,43 @@ jupyter notebook Entrega_Aprendizaje_Maq/TPMAQ2_VML_mlflow_parte2.ipynb
 ```
 
 Los notebooks son independientes entre sí (cada uno carga los CSV desde `EDA/dataset/`) pero deben ejecutarse sobre el mismo `mlflow.db` para que la comparación final de la Parte 2 incluya los modelos de la Parte 1.
+
+### Ambiente productivo (Docker)
+
+**Requisitos:** tener [Docker](https://docs.docker.com/engine/install/) instalado y corriendo.
+
+```bash
+cd Entrega_AMq2
+
+# Copiar y configurar variables de entorno
+cp .env.example .env
+# Editar .env y ajustar AIRFLOW_UID al resultado de: id -u
+
+# Crear carpetas necesarias para Airflow
+mkdir -p airflow/dags airflow/logs airflow/plugins airflow/config
+
+# Levantar todos los servicios
+docker compose --profile all up -d
+
+# Verificar que todos estén healthy
+docker ps -a
+```
+
+Una vez levantado, acceder a:
+
+| Servicio | URL | Credenciales |
+|---|---|---|
+| Airflow | http://localhost:8080 | airflow / airflow |
+| MLflow | http://localhost:5001 | — |
+| MinIO | http://localhost:9001 | minio / minio123 |
+| API | http://localhost:8800 | — |
+| Docs API | http://localhost:8800/docs | — |
+
+Para detener los servicios:
+
+```bash
+docker compose --profile all down
+```
 
 ## Dataset
 
