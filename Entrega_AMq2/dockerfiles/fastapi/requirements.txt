@@ -1,2 +1,8 @@
 fastapi>=0.116
 uvicorn>=0.27
+mlflow[extras]~=2.10
+scikit-learn
+pandas
+numpy
+boto3
+skops
