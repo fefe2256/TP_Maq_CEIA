@@ -32,8 +32,8 @@ build/
 .vscode/
 .idea/
 
-# Entrega AMq2 - Docker / Airflow
-Entrega_AMq2/.env
-Entrega_AMq2/airflow/logs/
-Entrega_AMq2/airflow/plugins/
-Entrega_AMq2/airflow/config/
+# Entrega Operaciones - Docker / Airflow
+Entrega_Operaciones/.env
+Entrega_Operaciones/airflow/logs/
+Entrega_Operaciones/airflow/plugins/
+Entrega_Operaciones/airflow/config/

@@ -8,7 +8,7 @@ Este repositorio integra los tres trabajos prácticos finales de la especializac
 |---|---|---|
 | `EDA/` | Análisis de Datos | Exploración, limpieza, feature engineering y preparación del dataset |
 | `Entrega_Aprendizaje_Maq/` | Aprendizaje de Máquina | Entrenamiento, optimización y comparación de modelos de clasificación |
-| `Entrega_AMq2/` | Arquitectura ML | Ambiente productivo con Docker: Airflow, MLflow, FastAPI y MinIO |
+| `Entrega_Operaciones/` | Arquitectura ML | Ambiente productivo con Docker: Airflow, MLflow, FastAPI y MinIO |
 
 ## Integrantes
 
@@ -40,7 +40,7 @@ TP_Maq_CEIA/
 │   ├── TPMAQ2_VML_mlflow_parte2.ipynb                     ← XGBoost, CatBoost, comparación final
 │   └── Ecobici_ML_V2.pptx                                 ← presentación de defensa
 │
-└── Entrega_AMq2/                                          ← Arquitectura ML
+└── Entrega_Operaciones/                                   ← Arquitectura ML
     ├── docker-compose.yaml                                ← orquestación de todos los servicios
     ├── .env.example                                       ← variables de entorno (copiar como .env)
     ├── airflow/
@@ -167,7 +167,7 @@ Ambos notebooks cargan los CSV desde `EDA/dataset/` y deben compartir el mismo `
 ### Ambiente productivo (Docker)
 
 ```bash
-cd Entrega_AMq2
+cd Entrega_Operaciones
 
 # Configurar variables de entorno
 cp .env.example .env

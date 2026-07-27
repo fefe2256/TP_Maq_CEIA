@@ -54,7 +54,7 @@ Implementación del modelo EcoBici (Random Forest) en un ambiente productivo con
 ## Estructura de la carpeta
 
 ```
-Entrega_AMq2/
+Entrega_Operaciones/
 ├── docker-compose.yaml          ← orquestación de todos los servicios
 ├── .env.example                 ← plantilla de variables de entorno
 │
@@ -87,7 +87,7 @@ Entrega_AMq2/
 
 ```bash
 # 1. Pararse en la carpeta del TP
-cd Entrega_AMq2
+cd Entrega_Operaciones
 
 # 2. Configurar variables de entorno
 cp .env.example .env
