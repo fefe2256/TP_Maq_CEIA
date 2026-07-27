@@ -2,26 +2,68 @@
 
 Esta carpeta **no contiene los archivos CSV** (están listados en `.gitignore`) porque son demasiado pesados para versionar en git (~1,5 GB en total).
 
-## Cómo se pueblan los archivos
+---
 
-Al correr el notebook de principio a fin (`notebook/TP_Grp7_V3_ecobici_presentation_ready.ipynb`) esta carpeta queda con los siguientes archivos:
+## Opción A — Correr el notebook de EDA (recomendada)
 
-| Archivo | Origen | Tamaño aprox. |
-|---|---|---|
-| `ecobici_data.csv` | Descargado automáticamente vía `gdown` en la Sección 1 del notebook | ~800 MB |
-| `X_train.csv` | Exportado al final del notebook (Sección 12) | ~465 MB |
-| `X_test.csv` | Exportado al final del notebook (Sección 12) | ~200 MB |
-| `y_train.csv` | Exportado al final del notebook (Sección 12) | ~34 MB |
-| `y_test.csv` | Exportado al final del notebook (Sección 12) | ~14 MB |
+Al correr el notebook completo (`EDA/notebook/TP_Grp7_V3_ecobici_presentation_ready.ipynb`), la Sección 1 descarga el dataset crudo automáticamente desde Google Drive usando `gdown`, y la Sección 12 exporta los 4 splits procesados. Esta carpeta queda con todos los archivos listos.
 
-## Fuente original
+```bash
+pip install gdown folium jupyter
+jupyter notebook EDA/notebook/TP_Grp7_V3_ecobici_presentation_ready.ipynb
+```
 
-El dataset crudo proviene del **Portal de Datos Abiertos del Gobierno de la Ciudad Autónoma de Buenos Aires**:
+---
 
-- Dataset: [Bicicletas Públicas · Recorridos Realizados 2024](https://data.buenosaires.gob.ar/dataset/bicicletas-publicas)
-- Licencia: CC-BY 4.0 según los términos del Portal GCBA.
+## Opción B — Descarga manual
 
-El notebook usa un mirror en Google Drive (accesible vía `gdown`) para acelerar la descarga y garantizar reproducibilidad.
+Si solo necesitás los archivos sin correr el notebook completo, podés descargarlos directamente.
+
+### Dataset crudo (`ecobici_data.csv`)
+
+**Link de descarga directa (Google Drive):**
+
+```
+https://drive.google.com/uc?id=1t-QLtl__u1JCIXtjXEMUy_VfIttB0Kbp
+```
+
+O usando `gdown` desde la terminal:
+
+```bash
+pip install gdown
+gdown 1t-QLtl__u1JCIXtjXEMUy_VfIttB0Kbp -O EDA/dataset/ecobici_data.csv
+```
+
+**Fuente original:** [Portal de Datos Abiertos GCBA — Bicicletas Públicas 2024](https://data.buenosaires.gob.ar/dataset/bicicletas-publicas) · Licencia CC-BY 4.0.
+
+### Dónde poner los archivos
+
+Todos los archivos deben quedar en esta misma carpeta (`EDA/dataset/`):
+
+```
+EDA/dataset/
+├── ecobici_data.csv   ← dataset crudo (765 MB)
+├── X_train.csv        ← generado por el notebook EDA (316 MB)
+├── X_test.csv         ← generado por el notebook EDA (135 MB)
+├── y_train.csv        ← generado por el notebook EDA  (32 MB)
+└── y_test.csv         ← generado por el notebook EDA  (14 MB)
+```
+
+Los splits (`X_train`, `X_test`, `y_train`, `y_test`) se generan corriendo el notebook de EDA sobre el raw. Si los recibís por otro canal (de un compañero del grupo, por ejemplo), también van en esta carpeta.
+
+---
+
+## Relación con el pipeline Docker
+
+Una vez que los archivos están en `EDA/dataset/`, el siguiente paso es subirlos a MinIO ejecutando la notebook `Entrega_Operaciones/notebook_example/test.ipynb` con el stack Docker levantado. El DAG de Airflow los leerá desde ahí para entrenar los modelos.
+
+```
+EDA/dataset/  →  test.ipynb  →  MinIO s3://data/ecobici/  →  DAG train_ecobici
+```
+
+Ver `Entrega_Operaciones/INSTRUCTIVO.md` para el paso a paso completo.
+
+---
 
 ## Especificación del dataset crudo
 
@@ -33,15 +75,11 @@ El notebook usa un mirror en Google Drive (accesible vía `gdown`) para acelerar
 | Formato | CSV con separador `,` y encoding UTF-8 |
 | Particularidad | Las primeras 2 filas no son datos (título `Tabla 1` + headers con `;`); el notebook las salta con `skiprows=2` |
 
-## Especificación del dataset exportado
+## Especificación de los splits exportados
 
-Tras correr el pipeline, los 4 CSV finales tienen la siguiente forma:
-
-| Archivo | Shape | Columnas |
+| Archivo | Shape | Descripción |
 |---|---|---|
-| `X_train.csv` | ~2.275.322 × 16 | 10 numéricas + 1 label-encoded + 5 one-hot (tras `drop_first=True`) |
-| `X_test.csv`  | ~975.139 × 16   | (mismas columnas) |
-| `y_train.csv` | ~2.275.322 × 1  | `tipo_viaje` ∈ {Corto, Mediano, Largo} |
-| `y_test.csv`  | ~975.139 × 1    | (mismas clases) |
-
-Los índices se preservan en todos los archivos para poder hacer trazabilidad fila a fila contra el dataset crudo si hace falta auditar.
+| `X_train.csv` | ~2.275.322 × 19 | Features de entrenamiento |
+| `X_test.csv`  | ~975.139 × 19   | Features de evaluación |
+| `y_train.csv` | ~2.275.322 × 1  | Target de entrenamiento (`tipo_viaje` ∈ {Corto, Mediano, Largo}) |
+| `y_test.csv`  | ~975.139 × 1    | Target de evaluación |
