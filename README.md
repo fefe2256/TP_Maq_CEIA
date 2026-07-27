@@ -14,8 +14,7 @@ Este repositorio integra los tres trabajos prácticos finales de la especializac
 
 - Carmen María Rodríguez Pastrano
 - Federico Agustín Fernández
-- Claudio Marcelo Imberlina
-- María Teresa Mallaupoma León
+- Francisco Meaca
 - Matías Guido Bovio
 
 ---
