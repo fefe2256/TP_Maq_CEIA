@@ -257,6 +257,25 @@ El modelo fue serializado en formato `.skops` y registrado como `champion` en el
 
 ---
 
+## Ajustes de hiperparámetros para ejecución local con Docker
+
+Los hiperparámetros originales de Random Forest y XGBoost fueron optimizados con Optuna sobre el dataset completo (~2.27 M filas) en un entorno con recursos holgados. Al ejecutar el DAG dentro de Docker Desktop con 8 GB de RAM asignados, los workers de Celery (que corren los modelos en paralelo) son terminados por el SO con SIGKILL por falta de memoria.
+
+Para que el pipeline pueda completarse en un entorno local, se aplicaron los siguientes ajustes en `airflow/dags/train_ecobici.py`:
+
+| Parámetro | Valor original (notebooks) | Valor ajustado (Docker local) | Motivo |
+|---|---|---|---|
+| RF `n_estimators` | 300 | 200 | Menor huella de memoria |
+| RF `max_depth` | 20 | 15 | Árboles más compactos |
+| RF `n_jobs` | -1 (todos los cores) | 1 | Evita picos de RAM al paralelizar |
+| RF `SAMPLE_TRAIN` | 1.000.000 filas | 300.000 filas | Menor uso de RAM durante el fit |
+| XGBoost `n_jobs` | -1 | 1 | Igual que RF |
+| XGBoost `SAMPLE_TRAIN` | 1.500.000 filas | 500.000 filas | Igual que RF |
+
+Estos cambios **no afectan la arquitectura del pipeline** — el DAG sigue entrenando los 5 modelos, logueando en MLflow y registrando el champion. Solo reducen la calidad de los modelos respecto a los resultados reportados en el TP2. En un entorno con más RAM (>= 16 GB asignados a Docker) se pueden restaurar los valores originales.
+
+---
+
 ## Estado de la entrega
 
 ### Completado
@@ -274,7 +293,7 @@ El modelo fue serializado en formato `.skops` y registrado como `champion` en el
 
 ### Pendiente para la entrega final
 
-- [ ] Prueba end-to-end con Docker: upload de datos → triggerear DAG → verificar MLflow → probar `/predict`
+- [x] Prueba end-to-end con Docker: upload de datos → triggerear DAG → verificar MLflow → probar `/predict`
 
 ---
 

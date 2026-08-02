@@ -63,12 +63,12 @@ FEATURES = [
 
 # Mejores hiperparámetros de Random Forest encontrados por Optuna (notebook parte1)
 RF_PARAMS = {
-    "n_estimators":     300,
-    "max_depth":        20,
+    "n_estimators":     200,
+    "max_depth":        15,
     "min_samples_leaf": 1,
     "min_samples_split": 2,
     "random_state":     RANDOM_STATE,
-    "n_jobs":           -1,
+    "n_jobs":           1,
 }
 
 # Mejores hiperparámetros de XGBoost encontrados por Optuna (notebook parte2)
@@ -85,7 +85,7 @@ XGB_PARAMS = {
     "num_class":       3,
     "eval_metric":     "mlogloss",
     "random_state":    RANDOM_STATE,
-    "n_jobs":          -1,
+    "n_jobs":          1,
     "verbosity":       0,
 }
 
@@ -232,7 +232,7 @@ def train_ecobici():
         """Random Forest con los mejores hiperparámetros encontrados por Optuna (parte1)."""
         X_train, X_test, y_train, y_test = _load_data(info["bucket"], info["prefix"])
 
-        SAMPLE_TRAIN = 1_000_000
+        SAMPLE_TRAIN = 300_000
         X_sample, _, y_sample, _ = train_test_split(
             X_train, y_train,
             train_size=SAMPLE_TRAIN,
@@ -264,7 +264,7 @@ def train_ecobici():
 
         X_train, X_test, y_train, y_test = _load_data(info["bucket"], info["prefix"])
 
-        SAMPLE_TRAIN = 1_500_000
+        SAMPLE_TRAIN = 500_000
         X_sample, _, y_sample_str, _ = train_test_split(
             X_train, y_train,
             train_size=SAMPLE_TRAIN,
