@@ -296,6 +296,7 @@ Con estos parámetros reducidos, el modelo champion resultante de la prueba end-
 ### Pendiente para la entrega final
 
 - [x] Prueba end-to-end con Docker: upload de datos → triggerear DAG → verificar MLflow → probar `/predict`
+- [ ] Explorar la posibilidad de un frontend simple en Streamlit para cargar los parámetros del viaje y consumir el endpoint `/predict`
 
 ---
 
