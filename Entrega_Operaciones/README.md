@@ -274,6 +274,8 @@ Para que el pipeline pueda completarse en un entorno local, se aplicaron los sig
 
 Estos cambios **no afectan la arquitectura del pipeline** — el DAG sigue entrenando los 5 modelos, logueando en MLflow y registrando el champion. Solo reducen la calidad de los modelos respecto a los resultados reportados en el TP2. En un entorno con más RAM (>= 16 GB asignados a Docker) se pueden restaurar los valores originales.
 
+Con estos parámetros reducidos, el modelo champion resultante de la prueba end-to-end fue **CatBoost** con un F1-macro de **0.4415**. En el TP2 con el dataset completo el champion era Random Forest (F1-macro: 0.4663); la diferencia se explica por el menor sample de entrenamiento de RF en este ambiente.
+
 ---
 
 ## Estado de la entrega
