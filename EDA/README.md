@@ -17,7 +17,6 @@ Trabajo práctico integrador de la materia *Análisis de Datos*. Se realiza el a
 - Federico Agustín Fernández
 - Claudio Marcelo Imberlina
 - María Teresa Mallaupoma León
-- Matías Guido Bovio
 
 ## Descripción del problema
 
