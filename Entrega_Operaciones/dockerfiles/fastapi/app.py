@@ -138,6 +138,30 @@ def health():
     }
 
 
+@app.post("/reload")
+def reload_model():
+    """
+    Vuelve a resolver el alias `champion` en el MLflow Model Registry y
+    recarga el modelo en memoria del proceso — sin reiniciar el contenedor.
+
+    Llamar a este endpoint después de que `train_ecobici` registre una nueva
+    versión del champion, para que la API la sirva de inmediato (antes había
+    que hacer `docker compose restart fastapi`).
+    """
+    global _model
+    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+    try:
+        _model = mlflow.pyfunc.load_model(MODEL_URI)
+        logger.info("Modelo recargado correctamente — %s", MODEL_URI)
+    except Exception as exc:
+        logger.warning("No se pudo recargar el modelo: %s", exc)
+        raise HTTPException(
+            status_code=503,
+            detail=f"No se pudo recargar el modelo desde {MODEL_URI}: {exc}",
+        )
+    return {"status": "ok", "modelo_uri": MODEL_URI}
+
+
 @app.post("/predict", response_model=PrediccionOutput)
 def predict(viaje: ViajeInput):
     """

@@ -14,8 +14,15 @@ Flujo:
         ↓
     select_champion → Model Registry MLflow (alias: champion)
 
+Prerequisito: correr primero el DAG `etl_ecobici`, que genera los splits en
+s3://data/ecobici/processed/ a partir del raw.
+
 Notas:
   - Datos leídos desde MinIO: s3://data/ecobici/processed/
+  - Las coordenadas de origen llegan CRUDAS desde `etl_ecobici` — el escalado
+    se hace acá, dentro del Pipeline de cada modelo (ver `_make_pipeline`),
+    para que entrenamiento e inferencia (FastAPI) usen siempre exactamente
+    la misma transformación.
   - MLflow en red interna Docker: http://mlflow:5000
   - Los hiperparámetros de RF y XGBoost son los mejores encontrados por Optuna
     en los notebooks locales (TPMAQ2_VML_mlflow_parte1/parte2.ipynb).
@@ -34,11 +41,14 @@ import mlflow.sklearn
 import pandas as pd
 from airflow.decorators import dag, task
 from mlflow import MlflowClient
+from sklearn.compose import ColumnTransformer
 from sklearn.dummy import DummyClassifier
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import f1_score
 from sklearn.model_selection import train_test_split
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
 
 logger = logging.getLogger(__name__)
 
@@ -143,6 +153,25 @@ def _setup_mlflow():
     mlflow.set_experiment(EXPERIMENT_NAME)
 
 
+# Coordenadas de origen — únicas features que se escalan (igual que en el
+# notebook de EDA, sección 3.9). Las cíclicas y las dummies no se tocan: ya
+# están en [-1, 1] o son binarias por construcción.
+SCALED_COLS = ["lat_estacion_origen", "long_estacion_origen"]
+
+
+def _make_pipeline(estimator) -> Pipeline:
+    """Empaqueta el StandardScaler junto con el estimador en un único Pipeline
+    de sklearn. MLflow loguea y sirve ambos como un solo objeto, así que
+    entrenamiento e inferencia (FastAPI) aplican siempre exactamente la misma
+    transformación sobre las coordenadas — evita el mismatch que había antes,
+    cuando el scaler se ajustaba en el notebook de EDA y no viajaba con el modelo."""
+    preprocessor = ColumnTransformer(
+        transformers=[("scaler", StandardScaler(), SCALED_COLS)],
+        remainder="passthrough",
+    )
+    return Pipeline([("preprocessor", preprocessor), ("model", estimator)])
+
+
 # ── DAG ──────────────────────────────────────────────────────────────────────
 
 @dag(
@@ -181,7 +210,7 @@ def train_ecobici():
             mlflow.set_tags({"modelo": "DummyClassifier", "categoria": "baseline"})
             mlflow.log_params({"strategy": "most_frequent"})
 
-            model = DummyClassifier(strategy="most_frequent")
+            model = _make_pipeline(DummyClassifier(strategy="most_frequent"))
             model.fit(X_train, y_train)
             y_pred = model.predict(X_test)
 
@@ -217,7 +246,7 @@ def train_ecobici():
             mlflow.set_tags({"modelo": "LogisticRegression", "categoria": "baseline_ml"})
             mlflow.log_params({**params, "sample_size": SAMPLE_SIZE})
 
-            model = LogisticRegression(**params)
+            model = _make_pipeline(LogisticRegression(**params))
             model.fit(X_sample, y_sample)
             y_pred = model.predict(X_test)
 
@@ -246,7 +275,7 @@ def train_ecobici():
             mlflow.set_tags({"modelo": "RandomForestClassifier", "categoria": "ensemble"})
             mlflow.log_params({**RF_PARAMS, "sample_size": SAMPLE_TRAIN})
 
-            model = RandomForestClassifier(**RF_PARAMS)
+            model = _make_pipeline(RandomForestClassifier(**RF_PARAMS))
             model.fit(X_sample, y_sample)
             y_pred = model.predict(X_test)
 
@@ -286,14 +315,16 @@ def train_ecobici():
             mlflow.set_tags({"modelo": "XGBClassifier", "categoria": "boosting"})
             mlflow.log_params({**params_a_logear, "sample_size": SAMPLE_TRAIN})
 
-            model = xgb.XGBClassifier(**XGB_PARAMS)
+            model = _make_pipeline(xgb.XGBClassifier(**XGB_PARAMS))
             model.fit(X_sample, y_sample)
 
             y_pred_enc = model.predict(X_test)
             y_pred = le.inverse_transform(y_pred_enc)
 
             f1 = _log_metrics(y_test, y_pred)
-            mlflow.xgboost.log_model(model, artifact_path="model")
+            # mlflow.sklearn (no mlflow.xgboost): el objeto logueado es un
+            # Pipeline(scaler + XGBClassifier), no un XGBClassifier "pelado".
+            mlflow.sklearn.log_model(model, artifact_path="model")
             logger.info("XGBoost — F1-macro: %.4f", f1)
 
             return {"run_id": run.info.run_id, "artifact_path": "model"}
@@ -319,12 +350,14 @@ def train_ecobici():
             mlflow.set_tags({"modelo": "CatBoostClassifier", "categoria": "boosting"})
             mlflow.log_params({**CAT_PARAMS, "sample_size": SAMPLE_TRAIN})
 
-            model = CatBoostClassifier(**CAT_PARAMS)
+            model = _make_pipeline(CatBoostClassifier(**CAT_PARAMS))
             model.fit(X_sample, y_sample)
             y_pred = model.predict(X_test)
 
             f1 = _log_metrics(y_test, y_pred)
-            mlflow.catboost.log_model(model, artifact_path="model")
+            # mlflow.sklearn (no mlflow.catboost): el objeto logueado es un
+            # Pipeline(scaler + CatBoostClassifier), no un CatBoostClassifier "pelado".
+            mlflow.sklearn.log_model(model, artifact_path="model")
             logger.info("CatBoost — F1-macro: %.4f", f1)
 
             return {"run_id": run.info.run_id, "artifact_path": "model"}

@@ -9,7 +9,14 @@ EDA/dataset/y_test.csv
 Entrega_Aprendizaje_Maq/mlruns/
 Entrega_Aprendizaje_Maq/mlflow.db
 Entrega_Aprendizaje_Maq/catboost_info/
+Entrega_Aprendizaje_Maq/Png/
 mlflow.db
+
+# Scaffold de `uv init` en la raíz (no forma parte del TP)
+/.python-version
+/main.py
+/pyproject.toml
+/uv.lock
 
 # Python
 __pycache__/
