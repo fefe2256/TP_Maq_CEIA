@@ -60,7 +60,8 @@ Entrega_Operaciones/
 │
 ├── airflow/
 │   ├── dags/
-│   │   └── train_ecobici.py     ← DAG: 5 modelos + selección automática de champion
+│   │   ├── etl_ecobici.py       ← DAG: raw → splits (sin scaler, ver train_ecobici)
+│   │   └── train_ecobici.py     ← DAG: 5 modelos (Pipeline scaler+modelo) + champion
 │   ├── logs/                    ← logs de ejecución (generado al levantar)
 │   ├── plugins/                 ← plugins custom de Airflow
 │   ├── config/                  ← configuración de Airflow
@@ -69,7 +70,7 @@ Entrega_Operaciones/
 │       └── connections.yaml     ← conexiones registradas en Airflow
 │
 ├── notebook_example/
-│   └── test.ipynb               ← upload de datasets a MinIO (ejecutar antes del DAG)
+│   └── test.ipynb               ← upload del raw a MinIO (ejecutar antes del DAG de ETL)
 │
 └── dockerfiles/
     ├── airflow/                 ← imagen custom (scikit-learn, mlflow, boto3, xgboost, catboost)
@@ -289,13 +290,15 @@ Con estos parámetros reducidos, el modelo champion resultante de la prueba end-
 - [x] Inicialización automática de buckets MinIO (`s3://mlflow`, `s3://data`)
 - [x] MLflow configurado con backend PostgreSQL y artifact store en MinIO
 - [x] Airflow configurado con CeleryExecutor y LocalFilesystemBackend para secrets
-- [x] Notebook de upload de datos a MinIO (`notebook_example/test.ipynb`)
-- [x] DAG `train_ecobici`: 5 modelos en paralelo → logging en MLflow → champion en Model Registry
-- [x] FastAPI `POST /predict`: carga el modelo `champion` desde MLflow Model Registry y devuelve `Corto` / `Mediano` / `Largo`
+- [x] Notebook de upload del raw a MinIO (`notebook_example/test.ipynb`)
+- [x] DAG `etl_ecobici`: genera los splits desde el raw dentro del ambiente (sin pasos manuales, sin escalar coordenadas)
+- [x] DAG `train_ecobici`: 5 modelos en paralelo, cada uno como `Pipeline(StandardScaler + modelo)` → logging en MLflow → champion en Model Registry
+- [x] FastAPI `POST /predict`: carga el modelo `champion` (Pipeline con scaler incluido) desde MLflow Model Registry y devuelve `Corto` / `Mediano` / `Largo`
+- [x] FastAPI `POST /reload`: recarga el champion sin reiniciar el contenedor
 
 ### Pendiente para la entrega final
 
-- [x] Prueba end-to-end con Docker: upload de datos → triggerear DAG → verificar MLflow → probar `/predict`
+- [x] Prueba end-to-end con Docker: upload del raw → DAG `etl_ecobici` → DAG `train_ecobici` → verificar MLflow → probar `/predict` y `/reload`
 - [ ] Explorar la posibilidad de un frontend simple en Streamlit para cargar los parámetros del viaje y consumir el endpoint `/predict`
 
 ---
@@ -305,7 +308,6 @@ Con estos parámetros reducidos, el modelo champion resultante de la prueba end-
 - Carmen María Rodríguez Pastrano
 - Federico Agustín Fernández
 - Francisco Meaca
-- Matías Guido Bovio
 
 ---
 
