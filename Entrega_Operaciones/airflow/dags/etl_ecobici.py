@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import io
 import logging
+import os
 from datetime import datetime
 
 import boto3
@@ -41,7 +42,7 @@ from sklearn.preprocessing import LabelEncoder
 logger = logging.getLogger(__name__)
 
 # ── Configuración global ─────────────────────────────────────────────────────
-DATA_BUCKET  = "data"
+DATA_BUCKET  = os.getenv("DATA_BUCKET", "data")
 RAW_PREFIX   = "ecobici/raw"
 RAW_FILE     = "ecobici_data.csv"
 TMP_PREFIX   = "ecobici/tmp"

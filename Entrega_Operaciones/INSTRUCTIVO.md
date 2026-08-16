@@ -82,26 +82,35 @@ Con el raw ya en MinIO, generá los splits procesados corriendo el **DAG de ETL*
 1. Ir a http://localhost:8080 (Airflow UI)
 2. Buscar el DAG **`etl_ecobici`**, activarlo con el toggle y dispararlo (▶)
 3. Corre 5 tasks en orden: `load_raw → clean → feature_engineer → split_and_encode → upload_splits`
-4. Al terminar, deja los 4 CSV en `s3://data/ecobici/processed/` — con las coordenadas de estación **sin escalar** (el escalado ahora lo hace el Pipeline de cada modelo en `train_ecobici`, no un paso separado).
+4. Al terminar, deja los 4 CSV en `s3://data/ecobici/processed/` — con las coordenadas de estación **sin escalar** (el escalado ahora lo hace el Pipeline de cada modelo en `train_ecobici_full`/`train_ecobici_light`, no un paso separado).
 
 ---
 
 ## Paso 3 — Ejecutar el DAG de entrenamiento
 
+Hay **dos variantes** del DAG de entrenamiento — mismos 5 modelos, mismos hiperparámetros, misma lógica de selección de champion (vive compartida en `airflow/dags/_ecobici_train_common.py`). Lo único que cambia es si las tasks corren en paralelo o en secuencia:
+
+| DAG | Cuándo usarlo | Cómo corren las tasks |
+|---|---|---|
+| `train_ecobici_full` | Docker con **≥ 16 GB RAM** asignados | Los 5 modelos en paralelo (hasta 2 simultáneos) |
+| `train_ecobici_light` | Docker con **poca RAM** (ej. 8 GB) | Los 5 modelos en secuencia, uno por vez (batch) |
+
+Si al correr `train_ecobici_full` los workers de Celery mueren con `SIGKILL` (falta de memoria — ver tabla de ajustes de hiperparámetros más abajo), usar `train_ecobici_light` en su lugar: mismos resultados, sin picos de memoria simultánea.
+
 1. Ir a http://localhost:8080 (Airflow UI)
-2. Buscar el DAG `train_ecobici`
+2. Buscar el DAG `train_ecobici_full` o `train_ecobici_light` según los recursos disponibles
 3. Activarlo con el toggle (por defecto arranca pausado)
 4. Hacer click en **"Trigger DAG"** (botón ▶)
 
 ### Qué hace el DAG
 
-El DAG `train_ecobici` corre 7 tareas en total:
+Corre 7 tareas en total. En `train_ecobici_full` los 5 modelos son paralelos; en `train_ecobici_light` están encadenados en secuencia:
 
 ```
 validate_data
     ↓
 train_baseline_trivial ─┐
-train_logistic_reg      ├── (paralelos)
+train_logistic_reg      ├── (paralelos en _full / secuenciales en _light)
 train_random_forest     │
 train_xgboost           │
 train_catboost         ─┘
@@ -114,8 +123,8 @@ select_champion
 | `validate_data` | — | Verifica que los CSVs existen en MinIO |
 | `train_baseline_trivial` | DummyClassifier (siempre Mediano) | Todo X_train |
 | `train_logistic_regression` | LogisticRegression (multinomial) | 1.5 M filas |
-| `train_random_forest` | RandomForestClassifier | 1 M filas |
-| `train_xgboost` | XGBClassifier | 1.5 M filas |
+| `train_random_forest` | RandomForestClassifier | 300 k filas |
+| `train_xgboost` | XGBClassifier | 500 k filas |
 | `train_catboost` | CatBoostClassifier | 1.5 M filas |
 | `select_champion` | — | Compara por F1-macro y registra el mejor |
 
@@ -123,7 +132,7 @@ Los hiperparámetros de Random Forest y XGBoost son los mejores encontrados por 
 
 ### Duración estimada
 
-El tiempo total depende de los recursos del contenedor. Estimado conservador:
+El tiempo total depende de los recursos del contenedor. Estimado conservador por tarea:
 
 | Tarea | Tiempo aproximado |
 |---|---|
@@ -135,7 +144,7 @@ El tiempo total depende de los recursos del contenedor. Estimado conservador:
 | train_catboost | 5–10 min |
 | select_champion | < 1 min |
 
-Los modelos de entrenamiento corren en paralelo (hasta 2 simultáneos), así que el tiempo total es aproximadamente el de los dos modelos más lentos.
+En `train_ecobici_full` los modelos corren en paralelo (hasta 2 simultáneos), así que el tiempo total es aproximadamente el de los dos modelos más lentos. En `train_ecobici_light` corren uno por vez, así que el tiempo total es aproximadamente la suma de todos.
 
 ---
 
@@ -206,7 +215,7 @@ La documentación interactiva con el formulario de prueba está en http://localh
 
 ## Paso 5.1 — Recargar el champion sin reiniciar el contenedor
 
-FastAPI carga el modelo `champion` **una sola vez**, al arrancar. Si volvés a correr `train_ecobici` más tarde (por ejemplo con datos nuevos) y se registra una versión distinta del champion, la API sigue sirviendo la versión vieja hasta que la avises.
+FastAPI carga el modelo `champion` **una sola vez**, al arrancar. Si volvés a correr `train_ecobici_full`/`train_ecobici_light` más tarde (por ejemplo con datos nuevos) y se registra una versión distinta del champion, la API sigue sirviendo la versión vieja hasta que la avises.
 
 En vez de reiniciar el contenedor (`docker compose restart fastapi`), llamá al endpoint `POST /reload`:
 
@@ -229,7 +238,8 @@ Esto vuelve a resolver el alias `champion` contra el Model Registry de MLflow y 
 |---|---|
 | Stack Docker (todos los servicios) | ✅ Listo |
 | DAG `etl_ecobici` (raw → splits, sin scaler) | ✅ Listo |
-| DAG `train_ecobici` (5 modelos con Pipeline scaler+modelo + champion) | ✅ Listo |
+| DAG `train_ecobici_full` (5 modelos en paralelo, Pipeline scaler+modelo + champion) | ✅ Listo |
+| DAG `train_ecobici_light` (mismos 5 modelos, en secuencia — para hosts con poca RAM) | ✅ Listo |
 | FastAPI `POST /predict` | ✅ Listo |
 | FastAPI `POST /reload` (recarga el champion sin reiniciar) | ✅ Listo |
 | Prueba end-to-end | ⏳ Pendiente (requiere Docker corriendo) |

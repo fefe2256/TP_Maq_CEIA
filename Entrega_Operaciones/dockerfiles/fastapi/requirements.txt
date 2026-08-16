@@ -1,10 +1,10 @@
 fastapi>=0.116
 uvicorn>=0.27
 mlflow[extras]~=2.10
-scikit-learn
+scikit-learn==1.6.1
 pandas
 numpy
 boto3
 skops
-xgboost
-catboost
+xgboost==3.4.1
+catboost==1.2.10

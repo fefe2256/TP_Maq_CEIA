@@ -60,8 +60,10 @@ Entrega_Operaciones/
 │
 ├── airflow/
 │   ├── dags/
-│   │   ├── etl_ecobici.py       ← DAG: raw → splits (sin scaler, ver train_ecobici)
-│   │   └── train_ecobici.py     ← DAG: 5 modelos (Pipeline scaler+modelo) + champion
+│   │   ├── etl_ecobici.py             ← DAG: raw → splits (sin scaler, ver train_ecobici_*)
+│   │   ├── train_ecobici_full.py      ← DAG: 5 modelos en paralelo (Pipeline scaler+modelo) + champion — hosts con muchos recursos
+│   │   ├── train_ecobici_light.py     ← DAG: mismos 5 modelos en secuencia (batch) — hosts con poca RAM
+│   │   └── _ecobici_train_common.py   ← lógica compartida entre las dos variantes de arriba (no es un DAG)
 │   ├── logs/                    ← logs de ejecución (generado al levantar)
 │   ├── plugins/                 ← plugins custom de Airflow
 │   ├── config/                  ← configuración de Airflow
@@ -215,7 +217,7 @@ mc ls local/data/ecobici/processed/
 
 El servidor MLflow containerizado **arranca vacío** (sin experimentos ni modelos registrados). Esto es correcto y esperado: los experimentos del TP2 viven en `Entrega_Aprendizaje_Maq/mlflow.db` (SQLite local) y no se migran a este ambiente.
 
-El experiment y los modelos en el Model Registry se crean automáticamente cuando corra el DAG `train_ecobici`. El nombre del experimento que crea el DAG es `TPMAQ2_Ecobici_Duracion_v2` (mismo nombre que los notebooks de TP2, para coherencia).
+El experiment y los modelos en el Model Registry se crean automáticamente cuando corra el DAG `train_ecobici_full` o `train_ecobici_light`. El nombre del experimento que crea el DAG es `TPMAQ2_Ecobici_Duracion_v2` (mismo nombre que los notebooks de TP2, para coherencia).
 
 > Los artefactos (modelos, matrices de confusión) se guardan automáticamente en MinIO (`s3://mlflow/`) cuando se loguea un run desde Airflow.
 
@@ -262,7 +264,7 @@ El modelo fue serializado en formato `.skops` y registrado como `champion` en el
 
 Los hiperparámetros originales de Random Forest y XGBoost fueron optimizados con Optuna sobre el dataset completo (~2.27 M filas) en un entorno con recursos holgados. Al ejecutar el DAG dentro de Docker Desktop con 8 GB de RAM asignados, los workers de Celery (que corren los modelos en paralelo) son terminados por el SO con SIGKILL por falta de memoria.
 
-Para que el pipeline pueda completarse en un entorno local, se aplicaron los siguientes ajustes en `airflow/dags/train_ecobici.py`:
+Para que el pipeline pueda completarse en un entorno local, se aplicaron los siguientes ajustes en `airflow/dags/_ecobici_train_common.py` (compartidos por las dos variantes del DAG de entrenamiento):
 
 | Parámetro | Valor original (notebooks) | Valor ajustado (Docker local) | Motivo |
 |---|---|---|---|
@@ -273,9 +275,18 @@ Para que el pipeline pueda completarse en un entorno local, se aplicaron los sig
 | XGBoost `n_jobs` | -1 | 1 | Igual que RF |
 | XGBoost `SAMPLE_TRAIN` | 1.500.000 filas | 500.000 filas | Igual que RF |
 
-Estos cambios **no afectan la arquitectura del pipeline** — el DAG sigue entrenando los 5 modelos, logueando en MLflow y registrando el champion. Solo reducen la calidad de los modelos respecto a los resultados reportados en el TP2. En un entorno con más RAM (>= 16 GB asignados a Docker) se pueden restaurar los valores originales.
+Estos cambios **no afectan la arquitectura del pipeline** — el DAG sigue entrenando los 5 modelos, logueando en MLflow y registrando el champion. Solo reducen la calidad de los modelos respecto a los resultados reportados en el TP2. En un entorno con más RAM (>= 16 GB asignados a Docker) se pueden restaurar los valores originales editando `RF_PARAMS`/`XGB_PARAMS` en `_ecobici_train_common.py` — el cambio aplica por igual a `train_ecobici_full` y `train_ecobici_light`, ya que ambas leen los mismos valores.
 
 Con estos parámetros reducidos, el modelo champion resultante de la prueba end-to-end fue **CatBoost** con un F1-macro de **0.4415**. En el TP2 con el dataset completo el champion era Random Forest (F1-macro: 0.4663); la diferencia se explica por el menor sample de entrenamiento de RF en este ambiente.
+
+### Dos variantes del DAG de entrenamiento
+
+Bajar los hiperparámetros ayuda, pero no elimina el problema de raíz: aunque cada modelo individual use menos RAM, Airflow igual puede arrancar 2 tasks en simultáneo (`AIRFLOW__CELERY__WORKER_CONCURRENCY: '2'`), y esos dos picos de memoria se suman. Por eso el DAG de entrenamiento existe en dos variantes, con los mismos hiperparámetros de la tabla de arriba:
+
+- **`train_ecobici_full`** — los 5 modelos en paralelo (como antes). Pensado para hosts con harta RAM (>= 16 GB asignados a Docker), donde correr 2 modelos a la vez no es un problema.
+- **`train_ecobici_light`** — los mismos 5 modelos, pero encadenados en secuencia (`max_active_tasks=1`): nunca hay más de un modelo entrenando a la vez. Pensado para hosts con poca RAM, como mitigación adicional (u alternativa) a bajar más los hiperparámetros.
+
+Ambas comparten toda la lógica (carga de datos, Pipeline scaler+modelo, métricas, selección de champion) desde `airflow/dags/_ecobici_train_common.py`, así que no hay código duplicado entre las dos — la única diferencia real es el orden en que Airflow programa las tasks.
 
 ---
 
@@ -292,13 +303,13 @@ Con estos parámetros reducidos, el modelo champion resultante de la prueba end-
 - [x] Airflow configurado con CeleryExecutor y LocalFilesystemBackend para secrets
 - [x] Notebook de upload del raw a MinIO (`notebook_example/test.ipynb`)
 - [x] DAG `etl_ecobici`: genera los splits desde el raw dentro del ambiente (sin pasos manuales, sin escalar coordenadas)
-- [x] DAG `train_ecobici`: 5 modelos en paralelo, cada uno como `Pipeline(StandardScaler + modelo)` → logging en MLflow → champion en Model Registry
+- [x] DAG `train_ecobici_full` / `train_ecobici_light`: 5 modelos (paralelo o en secuencia, según recursos disponibles), cada uno como `Pipeline(StandardScaler + modelo)` → logging en MLflow → champion en Model Registry
 - [x] FastAPI `POST /predict`: carga el modelo `champion` (Pipeline con scaler incluido) desde MLflow Model Registry y devuelve `Corto` / `Mediano` / `Largo`
 - [x] FastAPI `POST /reload`: recarga el champion sin reiniciar el contenedor
 
 ### Pendiente para la entrega final
 
-- [x] Prueba end-to-end con Docker: upload del raw → DAG `etl_ecobici` → DAG `train_ecobici` → verificar MLflow → probar `/predict` y `/reload`
+- [x] Prueba end-to-end con Docker: upload del raw → DAG `etl_ecobici` → DAG `train_ecobici_light` → verificar MLflow → probar `/predict` y `/reload`
 - [ ] Explorar la posibilidad de un frontend simple en Streamlit para cargar los parámetros del viaje y consumir el endpoint `/predict`
 
 ---

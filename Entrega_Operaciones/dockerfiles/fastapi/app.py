@@ -13,17 +13,21 @@ no está registrado, el endpoint /predict devuelve 503 hasta que esté disponibl
 from __future__ import annotations
 
 import logging
+import os
 from contextlib import asynccontextmanager
 
 import mlflow.pyfunc
+import numpy as np
 import pandas as pd
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
-MLFLOW_TRACKING_URI = "http://mlflow:5000"
-MODEL_URI           = "models:/ecobici_duracion_viaje@champion"
+MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://mlflow:5000")
+MLFLOW_REGISTRY_NAME = os.getenv("MLFLOW_REGISTRY_NAME", "ecobici_duracion_viaje")
+MLFLOW_MODEL_ALIAS  = os.getenv("MLFLOW_MODEL_ALIAS", "champion")
+MODEL_URI            = f"models:/{MLFLOW_REGISTRY_NAME}@{MLFLOW_MODEL_ALIAS}"
 
 DESCRIPCIONES = {
     "Corto":   "Menos de 10 minutos",
@@ -173,13 +177,16 @@ def predict(viaje: ViajeInput):
             status_code=503,
             detail=(
                 "Modelo no disponible. "
-                "Correr el DAG 'train_ecobici' en Airflow (http://localhost:8080) "
-                "para entrenar y registrar el modelo champion."
+                "Correr el DAG 'train_ecobici_full' o 'train_ecobici_light' en Airflow "
+                "(http://localhost:8080) para entrenar y registrar el modelo champion."
             ),
         )
 
     X = pd.DataFrame([viaje.model_dump()])
-    prediccion = str(_model.predict(X)[0])
+    # np.ravel: algunos estimadores (ej. CatBoostClassifier) devuelven la
+    # predicción como array 2D (n_samples, 1) en vez de 1D (n_samples,) —
+    # sin esto, str(...) serializaba la fila entera en vez del valor escalar.
+    prediccion = str(np.ravel(_model.predict(X))[0])
 
     return PrediccionOutput(
         tipo_viaje=prediccion,

@@ -1,9 +1,9 @@
 mlflow[extras]~=2.10
 boto3~=1.34
-scikit-learn
+scikit-learn==1.6.1
 pandas
 numpy
 skops
-xgboost
-catboost
+xgboost==3.4.1
+catboost==1.2.10
 pyarrow
