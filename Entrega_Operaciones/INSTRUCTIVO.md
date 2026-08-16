@@ -65,20 +65,26 @@ Todos deben aparecer como `healthy` o `running`. Si alguno queda en `starting`, 
 
 ---
 
-## Paso 2 — Subir los datos a MinIO
+## Paso 2 — Subir el raw a MinIO y generar los splits
 
-Con Docker corriendo, ejecutar la notebook `notebook_example/test.ipynb` desde tu entorno local.
-
-La notebook sube dos categorías de archivos al bucket `s3://data`:
+Con Docker corriendo, ejecutar la notebook `notebook_example/test.ipynb` desde tu entorno local. Sube el CSV crudo al bucket `s3://data`:
 
 | Prefijo en MinIO | Archivos | Descripción |
 |---|---|---|
 | `ecobici/raw/` | `ecobici_data.csv` (765 MB) | Dataset crudo original |
-| `ecobici/processed/` | `X_train.csv`, `X_test.csv`, `y_train.csv`, `y_test.csv` | Splits listos para entrenar |
 
-El DAG de entrenamiento lee desde `ecobici/processed/`. El raw queda disponible para un eventual DAG de ETL.
+Para verificar que el upload fue exitoso, ir a http://localhost:9001 → bucket `data` → carpeta `ecobici/raw/`.
 
-Para verificar que el upload fue exitoso, ir a http://localhost:9001 → bucket `data` → carpeta `ecobici/`.
+Con el raw ya en MinIO, generá los splits procesados corriendo el **DAG de ETL** (Paso 2.1) en vez de subirlos a mano — así el ambiente puede arrancar de cero sin depender de correr el notebook de EDA localmente.
+
+### Paso 2.1 — Correr el DAG `etl_ecobici`
+
+1. Ir a http://localhost:8080 (Airflow UI)
+2. Buscar el DAG **`etl_ecobici`**, activarlo con el toggle y disparalo (▶️)
+3. Corre 5 tasks en orden: `load_raw → clean → feature_engineering → split → upload_splits`
+4. Al terminar, deja los 4 CSV listos en `s3://data/ecobici/processed/` — **con las coordenadas de estación sin escalar** (el escalado ahora lo hace el Pipeline de cada modelo en `train_ecobici`, no un paso separado).
+
+> **Alternativa (no recomendada, solo para pruebas rápidas):** la notebook `test.ipynb` también puede subir los 4 CSV ya procesados directamente (generados corriendo el notebook de EDA local), sin pasar por el DAG de ETL. Si usás esta vía, esos CSV vienen con las coordenadas **ya escaladas** por el notebook de EDA — que es exactamente el mismatch que el DAG de ETL existe para evitar. Usala solo si sabés lo que estás haciendo.
 
 ---
 
@@ -200,12 +206,32 @@ La documentación interactiva con el formulario de prueba está en http://localh
 
 ---
 
+## Paso 5.1 — Recargar el champion sin reiniciar el contenedor
+
+FastAPI carga el modelo `champion` **una sola vez**, al arrancar. Si volvés a correr `train_ecobici` más tarde (por ejemplo, con datos nuevos) y se registra una versión distinta del champion, la API va a seguir sirviendo la versión vieja hasta que la avises.
+
+En vez de reiniciar el contenedor (`docker compose restart fastapi`), llamá al endpoint `POST /reload`:
+
+```bash
+curl -X POST http://localhost:8800/reload
+```
+
+Respuesta esperada:
+```json
+{"status": "ok", "modelo_uri": "models:/ecobici_duracion_viaje@champion"}
+```
+
+Esto vuelve a resolver el alias `champion` contra el Model Registry de MLflow y recarga el modelo en memoria del proceso de FastAPI, sin downtime del contenedor.
+
+---
+
 ## Resumen del estado actual
 
 | Componente | Estado |
 |---|---|
 | Stack Docker (todos los servicios) | ✅ Listo |
-| Notebook de upload a MinIO | ✅ Listo |
-| DAG `train_ecobici` (5 modelos + champion) | ✅ Listo |
+| DAG `etl_ecobici` (raw → splits, sin scaler) | ✅ Listo |
+| DAG `train_ecobici` (5 modelos con Pipeline scaler+modelo + champion) | ✅ Listo |
 | FastAPI `POST /predict` | ✅ Listo |
+| FastAPI `POST /reload` (recarga el champion sin reiniciar) | ✅ Listo |
 | Prueba end-to-end | ⏳ Pendiente (requiere Docker corriendo) |

@@ -6,3 +6,4 @@ numpy
 skops
 xgboost
 catboost
+pyarrow
