@@ -84,6 +84,8 @@ Con el raw ya en MinIO, generá los splits procesados corriendo el **DAG de ETL*
 3. Corre 5 tasks en orden: `load_raw → clean → feature_engineer → split_and_encode → upload_splits`
 4. Al terminar, deja los 4 CSV en `s3://data/ecobici/processed/` — con las coordenadas de estación **sin escalar** (el escalado ahora lo hace el Pipeline de cada modelo en `train_ecobici_full`/`train_ecobici_light`, no un paso separado).
 
+> **Alternativa (no recomendada, solo para pruebas rápidas):** la notebook `test.ipynb` también puede subir los 4 CSV ya procesados directamente (generados corriendo el notebook de EDA local), sin pasar por el DAG de ETL. Si usás esta vía, esos CSV vienen con las coordenadas **ya escaladas** por el notebook de EDA — que es exactamente el mismatch que el DAG de ETL existe para evitar. Usala solo si sabés lo que estás haciendo.
+
 ---
 
 ## Paso 3 — Ejecutar el DAG de entrenamiento

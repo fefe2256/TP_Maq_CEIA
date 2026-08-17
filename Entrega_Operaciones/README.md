@@ -319,7 +319,6 @@ Ambas comparten toda la lógica (carga de datos, Pipeline scaler+modelo, métric
 - Carmen María Rodríguez Pastrano
 - Federico Agustín Fernández
 - Francisco Meaca
-- Matías Guido Bovio
 
 ---
 
