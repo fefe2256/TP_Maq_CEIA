@@ -44,7 +44,10 @@ TP_Maq_CEIA/
     ├── .env.example                                       ← variables de entorno (copiar como .env)
     ├── airflow/
     │   ├── dags/
-    │   │   └── train_ecobici.py                           ← DAG de entrenamiento (5 modelos + champion)
+    │   │   ├── etl_ecobici.py                             ← DAG: raw → splits procesados
+    │   │   ├── train_ecobici_full.py                      ← DAG: 5 modelos en paralelo (hosts con muchos recursos)
+    │   │   ├── train_ecobici_light.py                     ← DAG: 5 modelos en secuencia (hosts con poca RAM)
+    │   │   └── _ecobici_train_common.py                   ← lógica compartida entre las dos variantes
     │   └── secrets/                                       ← variables y conexiones
     ├── notebook_example/
     │   └── test.ipynb                                     ← upload de datos a MinIO
@@ -145,9 +148,9 @@ Implementación del modelo EcoBici en un ambiente productivo containerizado con 
 | MinIO | Data Lake S3 local (datasets y artefactos) | 9000/9001 |
 | PostgreSQL | Backend de Airflow y MLflow | 5432 |
 
-### DAG de entrenamiento (`train_ecobici`)
+### DAGs de entrenamiento
 
-Pipeline MLOps completo orquestado con Airflow dentro de Docker:
+Pipeline MLOps completo orquestado con Airflow dentro de Docker. Primero corre `etl_ecobici` (genera los splits desde el raw) y luego una de las dos variantes de entrenamiento:
 
 1. **`validate_data`** — verifica que los splits existen en MinIO
 2. **`train_baseline_trivial`** — DummyClassifier (clase mayoritaria)
@@ -157,7 +160,7 @@ Pipeline MLOps completo orquestado con Airflow dentro de Docker:
 6. **`train_catboost`** — CatBoost con parámetros default
 7. **`select_champion`** — compara por F1-macro y registra el mejor en el Model Registry con alias `champion`
 
-Los modelos 2–6 corren en paralelo. Todos loguean en el MLflow containerizado (`http://mlflow:5000`).
+**`train_ecobici_full`**: modelos 2–6 en paralelo, para hosts con suficiente RAM (≥ 16 GB asignados a Docker). **`train_ecobici_light`**: mismos modelos en secuencia (`max_active_tasks=1`), para hosts con poca RAM. Ambas comparten la lógica desde `_ecobici_train_common.py` y loguean en el MLflow containerizado (`http://mlflow:5000`).
 
 ### API de predicción (`POST /predict`)
 
